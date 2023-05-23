@@ -58,7 +58,8 @@ time_format = "%Y-%m-%d %H:%M:%S%z"
 stocks_df = pd.DataFrame()
 for stk in stocks.items():
     stock_data = extract_data(stk[1],start_date,end_date).reset_index()[["Datetime","Open","High","Low","Close"]]
-    stock_data["Datetime"] = stock_data["Datetime"].apply(lambda x:convert_to_utc(x,time_format))
+    #stock_data["Datetime"] = stock_data["Datetime"].apply(lambda x:convert_to_utc(x,time_format))
+    stock_data["Datetime"] = stock_data["Datetime"].apply(lambda x:datetime.strptime(x.strftime("%Y-%m-%d %H:%M:%S"),"%Y-%m-%d %H:%M:%S"))
     if currencies[stk[0]] != "GBp":
         currency_data = extract_data(str(currencies[stk[0]])+"GBP=X",start_date,end_date)
         currency_data = currency_data.reset_index()[["Datetime","Open","High","Low","Close"]]
@@ -77,7 +78,7 @@ for stk in stocks.items():
     stocks_df = pd.concat([stocks_df,stock_data])
     
 print(stocks_df["Stock"].value_counts())
-#stocks_df.to_csv(data_path+"Stocks_Data_UnPivoted.csv",index=False)
+stocks_df.to_csv(data_path+"Stocks_Data_Raw.csv",index=False)
         
 
 
