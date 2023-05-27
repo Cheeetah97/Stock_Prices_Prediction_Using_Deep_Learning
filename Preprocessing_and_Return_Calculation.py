@@ -20,6 +20,7 @@ def calculate_price_return(series):
 
 stock_data = pd.read_csv(data_path+"Stocks_Data_Raw.csv")
 stock_data["Datetime"] = pd.to_datetime(stock_data["Datetime"],format="%Y-%m-%d %H:00:00")
+stock_data["Hour"] = stock_data["Datetime"].dt.hour
 
 stocks = []
 low_counts = []
@@ -29,6 +30,28 @@ for stk in list(stock_data.Stock.unique()):
     temp = stock_data[stock_data.Stock==stk]
     temp = temp.sort_values(by=["Datetime"])
     temp = temp.reset_index(drop=True)
+    
+    # Filling Missing Hours
+    temp["Day"] = temp["Datetime"].dt.dayofyear
+    for k,v in temp.iterrows():
+        if (k > 0)&(temp["Day"].iloc[k]!=temp["Day"].iloc[k-1])&(temp["Hour"].iloc[k]!=8):
+            index_pos = k
+            new_rows = pd.concat([temp.iloc[[k]] for i in range(temp["Hour"].iloc[k],temp["Hour"].min(),-1)],ignore_index=True)
+            for k,v in new_rows.iterrows():
+                new_rows["Datetime"].iloc[k] = new_rows["Datetime"].iloc[k]-pd.DateOffset(hours=k+1)
+                new_rows["Hour"].iloc[k] = new_rows["Hour"].iloc[k]-(k+1)
+                new_rows.loc[k,["Open","High","Low","Close"]] = np.nan
+    temp1 = temp.iloc[:index_pos]
+    temp2 = temp.iloc[index_pos:]
+    temp = pd.concat([temp1,new_rows.sort_values(by=["Datetime"]),temp2],ignore_index=True)
+    temp["Open"] = temp["Open"].interpolate(method='polynomial',order=2)
+    temp["High"] = temp["High"].interpolate(method='polynomial',order=2)
+    temp["Low"] = temp["Low"].interpolate(method='polynomial',order=2)
+    temp["Close"] = temp["Close"].interpolate(method='polynomial',order=2)
+    temp = temp.drop("Day",axis=1)
+    
+    temp["Day_Diff"] = (temp["Datetime"].shift(9) - temp["Datetime"]).dt.days
+    temp["Day_Diff"] = temp["Day_Diff"].fillna(-1)
     
     for col in ["Open","High","Low","Close"]:
         temp["Upper_Band"],temp["Lower_Band"],temp["Rolling_Mean"] = calculate_bollinger_bands(temp[col])
@@ -42,11 +65,22 @@ for stk in list(stock_data.Stock.unique()):
         # Removing Outliers
         temp.loc[temp[col]>temp.Upper_Band,col] = temp["Rolling_Mean"]
         temp.loc[temp[col]<temp.Lower_Band,col] = temp["Rolling_Mean"]
+        
+        # Removing the Effect of Missing Days(Weekends)
+        for i in range(len(temp)-1,2,-1):
+            if (temp["Day_Diff"].iloc[i]<-1)&(temp["Hour"].iloc[i] == 8):
+                prev = temp[["Hour","Day_Diff",col]].iloc[:i]
+                thr = 0.020*np.mean(prev.loc[~((prev.Hour.isin([8,9]))&(prev.Day_Diff!=-1)),col])
+                difa = temp[col].iloc[i]-temp[col].iloc[i-1]
+                if (difa >= thr) or (difa <= -thr):
+                    if difa > 0:
+                        temp[col].iloc[:i] += difa - (thr/2)
+                    else:
+                        temp[col].iloc[:i] += difa + (thr/2)
     
         # Calculating Price Return
         temp[col[0]] = calculate_price_return(temp[col])
     
-    temp = temp.drop(["Lower_Band","Upper_Band","Rolling_Mean"],axis=1)
     df = pd.concat([df,temp])
 
 df[["Datetime","Open","High","Low","Close","Stock"]].to_csv(data_path+"Stocks_Data(Prices).csv",index=False)
