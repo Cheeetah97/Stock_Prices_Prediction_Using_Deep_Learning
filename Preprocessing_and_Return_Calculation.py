@@ -1,4 +1,5 @@
 #%%
+# Importing the Libraries
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -93,8 +94,9 @@ for stk in list(stock_data.Stock.unique()):
         # Removing the Effect of Missing Hours of a Day
         temp[col+"_Sum"] = calculate_nfuture_sum(8,temp[col])
     
-        # Calculating Price Return
-        temp[col[0]] = calculate_return(temp[col+"_Sum"])
+        # Calculating Price Returns
+        temp[col[0]+"_S"] = calculate_return(temp[col+"_Sum"])
+        temp[col[0]] = calculate_return(temp[col])
     
     df = pd.concat([df,temp])
 
@@ -103,13 +105,12 @@ corrections_df = pd.DataFrame(data={"Stock":stocks,"Low_Counts":low_counts,"High
 df[["Datetime","Open","High","Low","Close","Stock",
     "Open_Sum","High_Sum","Low_Sum","Close_Sum"]].to_csv(data_path+"Stocks_Data(Prices).csv",index=False)
 
-stock_data = df[["Datetime","Open","High","Low","Close","O","H","L","C","Stock"]].reset_index(drop=True).copy()
+stock_data = df[["Datetime","Stock","O","H","L","C","O_S","H_S","L_S","C_S"]].reset_index(drop=True).copy()
 stock_data = stock_data[stock_data.groupby(by=["Stock"]).cumcount(ascending=False) > 0]
 stock_data.to_csv(data_path+"Stocks_Data.csv",index=False)
 #%%
 # Pivoting the Data and Saving
-stock_data = pd.pivot_table(stock_data,values=["Open","High","Low","Close","O","H","L","C"],index="Datetime",columns="Stock")
+stock_data = pd.pivot_table(stock_data,values=["O","H","L","C","O_S","H_S","L_S","C_S"],index="Datetime",columns="Stock")
 stock_data = stock_data.reset_index()
 stock_data.columns = ['_'.join(col).strip() if col[0] != "Datetime" else ' '.join(col).strip() for col in stock_data.columns.values]
 stock_data.to_csv(data_path+"Stocks_Data_Pivoted.csv",index=False)
-# %%
